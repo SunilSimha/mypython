@@ -42,14 +42,24 @@ def findsources(image,cube,check=False,output='.',spectra=False,helio=0,nsig=2.,
     from astropy import table
     import numpy as np
     import os
-    from mypython.ifu import muse_utils as utl
-    from mypython.fits import pyregmask as msk
+    try:
+        from mypython.ifu import muse_utils as utl
+        from mypython.fits import pyregmask as msk
+    except ImportError:
+        from mypython import ifu
+        from ifu import muse_utils as utl
+        from mypython import fits
+        from fits import pyregmask as msk
+        from astropy.io import fits
     from shutil import copyfile
     import glob
 
     #open image
     img=fits.open(image)
-    header=img[0].header
+    try:
+        header=img[1].header
+    except:
+        header= img[0].header
     imgwcs = wcs.WCS(header)
     try:
         #this is ok for narrow band images 
@@ -102,8 +112,8 @@ def findsources(image,cube,check=False,output='.',spectra=False,helio=0,nsig=2.,
 
     #extracting sources at nsigma
     thresh = nsig * bkg.globalrms
-    segmap = np.zeros((header["NAXIS1"],header["NAXIS2"]))
-    objects,segmap=sep.extract(data,thresh,segmentation_map=True,
+    # segmap = np.zeros((header["NAXIS1"],header["NAXIS2"]))
+    objects, segmap=sep.extract(data,thresh,segmentation_map=True,
                                minarea=minarea,clean=clean,mask=badmask,deblend_cont=0.0001)
     print("Extracted {} objects... ".format(len(objects)))
     
@@ -153,7 +163,7 @@ def findsources(image,cube,check=False,output='.',spectra=False,helio=0,nsig=2.,
     decstr = coord.dec.to_string(u.degree, precision=1, sep='', alwayssign=True)
     name = [sname+'J{0}{1}'.format(rastr[k], decstr[k]) for k in range(len(rastr))]
     ids  = np.arange(len(name))
-    
+
     #write source catalogue
     print('Writing catalogue..')
     tab = table.Table(objects)
@@ -176,7 +186,7 @@ def findsources(image,cube,check=False,output='.',spectra=False,helio=0,nsig=2.,
     tbhdu2 = fits.BinTableHDU(phot_r)
     hdulist = fits.HDUList([fits.PrimaryHDU(), tbhdu, tbhdu2])
     hdulist.writeto(output+'/catalogue.fits',overwrite=True)	
-    
+
     if((marz) & (spectra)):
         #if marz is True but no magnitude limit set, create marz file for whole catalogue
         if marz==True:
