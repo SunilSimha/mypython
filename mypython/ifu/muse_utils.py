@@ -83,6 +83,8 @@ def cube2img(cube,write=None,wrange=None,helio=0,filt=None):
 
     #read the cube
     cubdata,vardata,wcsc,wavec,regions=readcube(cube,helio=helio)
+
+
         
     #find delta lambda
     delta_lambda=wavec-np.roll(wavec,1)

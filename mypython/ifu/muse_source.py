@@ -5,7 +5,7 @@ These are sets of utilities to handle muse sources
 
 def findsources(image,cube,check=False,output='.',spectra=False,helio=0,nsig=2.,
                 minarea=10.,regmask=None,clean=True,outspec='Spectra',marz=False, 
-		rphot=False, sname='MUSE'):
+		rphot=False, sname='MUSE', tovac=True):
 
     """      
 
@@ -120,8 +120,8 @@ def findsources(image,cube,check=False,output='.',spectra=False,helio=0,nsig=2.,
         #loop over detections
         for obj in objects:
             #init mask
-            tmpmask=np.zeros((data.shape[0],data.shape[1]),dtype=np.bool)
-            tmpmask3d=np.zeros((1,data.shape[0],data.shape[1]),dtype=np.bool)
+            tmpmask=np.zeros((data.shape[0],data.shape[1]),dtype=bool)
+            tmpmask3d=np.zeros((1,data.shape[0],data.shape[1]),dtype=bool)
             #fill this mask
             sep.mask_ellipse(tmpmask,obj['x'],obj['y'],obj['a'],obj['b'],obj['theta'],r=2)
             tmpmask3d[0,:,:]=tmpmask[:,:]
@@ -129,7 +129,7 @@ def findsources(image,cube,check=False,output='.',spectra=False,helio=0,nsig=2.,
             if(spectra):
                 savename="{}/id{}.fits".format(outspec,nbj)
                 utl.cube2spec(cube,obj['x'],obj['y'],None,write=savename,
-                              shape='mask',helio=helio,mask=tmpmask3d,tovac=True)
+                              shape='mask',helio=helio,mask=tmpmask3d,tovac=tovac)
             #go to next
             nbj=nbj+1
 
@@ -258,6 +258,7 @@ def marz_file(imagefile, catalogue, specdir, output,r_lim=False):
     nspectra = len(filelist)
 
     id     = np.arange(len(filelist)) + 1  # Integer array - id of object
+    name = catalog[1].data['name']         # Array of object names
     x      = catalog[1].data['x']          # Array of object image x-coords
     y      = catalog[1].data['y']          # Array of object image y-coords
     world_coords = wref.wcs_pix2world(np.transpose(np.array([x,y])), 0)
@@ -298,12 +299,13 @@ def marz_file(imagefile, catalogue, specdir, output,r_lim=False):
     
     # Add in source parameters as fits table
     c1 = fits.Column(name='source_id', format='80A', array=id)
-    c2 = fits.Column(name='RA', format='D', array=ra)
-    c3 = fits.Column(name='DEC', format='D',array=dec)
-    c4 = fits.Column(name='X', format='J',array=x)
-    c5 = fits.Column(name='Y', format='J', array=y)
-    c6 = fits.Column(name='TYPE', format='1A', array=type)
-    coldefs = fits.ColDefs([c1, c2, c3, c4, c5,c6])
+    c2 = fits.Column(name='NAME', format='80A', array=name)
+    c3 = fits.Column(name='RA', format='D', array=ra)
+    c4 = fits.Column(name='DEC', format='D',array=dec)
+    c5 = fits.Column(name='X', format='J',array=x)
+    c6 = fits.Column(name='Y', format='J', array=y)
+    c7 = fits.Column(name='TYPE', format='1A', array=type)
+    coldefs = fits.ColDefs([c1, c2, c3, c4, c5, c6, c7])
     marz_hdu.append(fits.BinTableHDU.from_columns(coldefs))
     marz_hdu[4].header.set('extname', 'FIBRES')
 
@@ -398,7 +400,8 @@ def sourcephot(catalogue,image,segmap,detection,instrument='MUSE',dxp=0.,dyp=0.,
     else:
         segmask=(np.nan_to_num(seg[0].data.byteswap(True).newbyteorder()))
 
-
+    if segmask.shape != dataflx.shape:
+        print('Segmentation map and image have different shapes!')
     #if needed, map the segmap to new image with transformation
     if('MUSE' not in instrument):
         #allocate space for transformed segmentation map
@@ -433,7 +436,7 @@ def sourcephot(catalogue,image,segmap,detection,instrument='MUSE',dxp=0.,dyp=0.,
         #dump the transformed segmap for checking 
         hdumain  = fits.PrimaryHDU(segmasktrans,header=img[1].header)
         hdulist = fits.HDUList(hdumain)
-        hdulist.writeto("{}_segremap.fits".format(rname),clobber=True)
+        hdulist.writeto("{}_segremap.fits".format(rname),overwrite=True)
     else:
         #no transformation needed
         segmasktrans=segmask
@@ -473,7 +476,9 @@ def sourcephot(catalogue,image,segmap,detection,instrument='MUSE',dxp=0.,dyp=0.,
         tmpmask[pixels]=0
 
         #compute kron radius [pixel of reference image]
-        kronrad, flg = sep.kron_radius(tmpdata,x,y,a,b,theta,6.0,mask=tmpmask)
+        kronrad, flg = sep.kron_radius(tmpdata,[x],[y],[a],[b],[theta],[6.0],mask=tmpmask)
+        kronrad=kronrad[0]
+        flg = flg[0]
 
         #plt.imshow(np.log10(tmpdata+1),origin='low')
         #plt.show()
@@ -554,9 +559,9 @@ def sourcephot(catalogue,image,segmap,detection,instrument='MUSE',dxp=0.,dyp=0.,
         if(use_circle):        
            
             #flux in circular aperture
-            flux_kron, err, flg = sep.sum_circle(tmpdata,xphot,yphot,rminphot,mask=tmpmask)
+            flux_kron, err, flg = sep.sum_circle(tmpdata,[xphot],[yphot],[rminphot],mask=tmpmask)
             #propagate variance
-            fluxvar, err, flg = sep.sum_circle(tmpvar,xphot,yphot,rminphot,mask=tmpmask)
+            fluxvar, err, flg = sep.sum_circle(tmpvar,[xphot],[yphot],[rminphot],mask=tmpmask)
             #store Rused in arcsec
             rused=rminphot*psimg
 
@@ -568,17 +573,17 @@ def sourcephot(catalogue,image,segmap,detection,instrument='MUSE',dxp=0.,dyp=0.,
         #kron apertures 
         else:
             #kron flux 
-            flux_kron, err, flg = sep.sum_ellipse(tmpdata,xphot, yphot, aphot, bphot, theta, kn*kronrad,
+            flux_kron, err, flg = sep.sum_ellipse(tmpdata,[xphot], [yphot], [aphot], [bphot], [theta], kn*kronrad,
                                                   mask=tmpmask)            
             #propagate variance 
-            fluxvar, err, flg = sep.sum_ellipse(tmpvar,xphot,yphot, aphot, bphot, theta, kn*kronrad,
+            fluxvar, err, flg = sep.sum_ellipse(tmpvar,[xphot],[yphot], [aphot], [bphot], [theta], [kn*kronrad],
                                                 mask=tmpmask)
             #translate in radius
             rused=kn*kronrad*psimg*np.sqrt(aphot*bphot)
 
             #update check aperture
             tmpcheckaper=np.zeros(dataflx.shape,dtype=bool)
-            sep.mask_ellipse(tmpcheckaper,xphot,yphot,aphot,bphot,theta,r=kn*kronrad)
+            sep.mask_ellipse(tmpcheckaper,[xphot],[yphot],[aphot],[bphot],[theta],r=[kn*kronrad])
             checkaperture=checkaperture+tmpcheckaper*(idobj+1)
 
         #compute error for aperture
@@ -644,7 +649,7 @@ def sourcephot(catalogue,image,segmap,detection,instrument='MUSE',dxp=0.,dyp=0.,
     #dump the aperture check image 
     hdumain  = fits.PrimaryHDU(checkaperture,header=img[1].header)
     hdulist = fits.HDUList(hdumain)
-    hdulist.writeto("{}_aper.fits".format(rname),clobber=True)
+    hdulist.writeto("{}_aper.fits".format(rname),overwrite=True)
 
     #close
     cat.close()
@@ -772,7 +777,7 @@ def mocklines(cube,fluxlimits,num=500,wavelimits=None,spatwidth=3.5,wavewidth=2,
         hdulist[1].header=cubhdu[1].header
 
     write='{}_{}'.format(outprefix,cube)
-    hdulist.writeto(write,clobber=True)
+    hdulist.writeto(write,overwrite=True)
     
 
     fl.close()

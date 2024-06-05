@@ -152,3 +152,6 @@
 152  92597: 1274 IMACS_f4_B         (CCD+atm)     lambda_c= 4382.91      AB-Vega= 0.00
 153  93872:  815 IMACS_f4_V         (CCD+atm)     lambda_c= 5445.62      AB-Vega= 0.00
 154  94688: 1490 IMACS_f4_R         (CCD+atm)     lambda_c= 6600.81      AB-Vega= 0.00
+155  96179:   75 SDSS_filter_r_MUSE.txt  FLIMFLAM lambda_c= 6186.19      AB-Vega= 0.15
+156  96255:   46 SDSS_filter_g_MUSE.txt  FLIMFLAM lambda_c= 4718.87      AB-Vega=-0.10
+157  96302:   89 SDSS_filter_i_MUSE.txt  FLIMFLAM lambda_c= 7505.90      AB-Vega= 0.37
