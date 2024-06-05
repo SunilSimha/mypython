@@ -42,14 +42,24 @@ def findsources(image,cube,check=False,output='.',spectra=False,helio=0,nsig=2.,
     from astropy import table
     import numpy as np
     import os
-    from mypython.ifu import muse_utils as utl
-    from mypython.fits import pyregmask as msk
+    try:
+        from mypython.ifu import muse_utils as utl
+        from mypython.fits import pyregmask as msk
+    except ImportError:
+        from mypython import ifu
+        from ifu import muse_utils as utl
+        from mypython import fits
+        from fits import pyregmask as msk
+        from astropy.io import fits
     from shutil import copyfile
     import glob
 
     #open image
     img=fits.open(image)
-    header=img[0].header
+    try:
+        header=img[1].header
+    except:
+        header= img[0].header
     imgwcs = wcs.WCS(header)
     try:
         #this is ok for narrow band images 
@@ -102,8 +112,8 @@ def findsources(image,cube,check=False,output='.',spectra=False,helio=0,nsig=2.,
 
     #extracting sources at nsigma
     thresh = nsig * bkg.globalrms
-    segmap = np.zeros((header["NAXIS1"],header["NAXIS2"]))
-    objects,segmap=sep.extract(data,thresh,segmentation_map=True,
+    # segmap = np.zeros((header["NAXIS1"],header["NAXIS2"]))
+    objects, segmap=sep.extract(data,thresh,segmentation_map=True,
                                minarea=minarea,clean=clean,mask=badmask,deblend_cont=0.0001)
     print("Extracted {} objects... ".format(len(objects)))
     
@@ -153,7 +163,7 @@ def findsources(image,cube,check=False,output='.',spectra=False,helio=0,nsig=2.,
     decstr = coord.dec.to_string(u.degree, precision=1, sep='', alwayssign=True)
     name = [sname+'J{0}{1}'.format(rastr[k], decstr[k]) for k in range(len(rastr))]
     ids  = np.arange(len(name))
-    
+
     #write source catalogue
     print('Writing catalogue..')
     tab = table.Table(objects)
@@ -168,7 +178,8 @@ def findsources(image,cube,check=False,output='.',spectra=False,helio=0,nsig=2.,
     
     #rband photometry
     if (rphot):
-        rimg, rvar, rwcsimg = utl.cube2img(cube, filt=129, write=output+'/Image_R.fits')
+        if not os.path.exists(output+'/Image_R.fits'):
+            rimg, rvar, rwcsimg = utl.cube2img(cube, filt=129, write=output+'/Image_R.fits')
         phot_r = sourcephot(output+'/catalogue.fits', output+'/Image_R.fits', output+'/segmap.fits', image)
         phot_r.add_column(table.Column(name),1,name='name')
 
@@ -176,7 +187,7 @@ def findsources(image,cube,check=False,output='.',spectra=False,helio=0,nsig=2.,
     tbhdu2 = fits.BinTableHDU(phot_r)
     hdulist = fits.HDUList([fits.PrimaryHDU(), tbhdu, tbhdu2])
     hdulist.writeto(output+'/catalogue.fits',overwrite=True)	
-    
+
     if((marz) & (spectra)):
         #if marz is True but no magnitude limit set, create marz file for whole catalogue
         if marz==True:
@@ -360,7 +371,10 @@ def sourcephot(catalogue,image,segmap,detection,instrument='MUSE',dxp=0.,dyp=0.,
     det=fits.open(detection)
 
     #grab reference wcs from detection image 
-    wref=wcs.WCS(det[0].header)
+    try:
+        wref=wcs.WCS(det[1].header)
+    except:
+        wref = wcs.WCS(det[0].header)
     psref=wref.pixel_scale_matrix[1,1]*3600.
     print ('Reference pixel size {}'.format(psref))
 
@@ -392,8 +406,13 @@ def sourcephot(catalogue,image,segmap,detection,instrument='MUSE',dxp=0.,dyp=0.,
     #grab flux and var
     dataflx=np.nan_to_num(imgdata.byteswap(True).newbyteorder())
     datavar=np.nan_to_num(vardata.byteswap(True).newbyteorder())
-    #grab detection and seg mask 
-    detflx=np.nan_to_num(det[0].data.byteswap(True).newbyteorder())
+    # import pdb; pdb.set_trace()
+    #grab detection and seg mask
+    try:
+        detflx=np.nan_to_num(det[1].data.byteswap(True).newbyteorder())
+    except:
+        detflx = np.nan_to_num(det[0].data.byteswap(True).newbyteorder())
+
     #go back to 1d
     if(len(seg[0].data.shape)>2):
         segmask=(np.nan_to_num(seg[0].data.byteswap(True).newbyteorder()))[0,:,:]

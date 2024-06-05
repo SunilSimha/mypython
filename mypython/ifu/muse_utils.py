@@ -77,7 +77,11 @@ def cube2img(cube,write=None,wrange=None,helio=0,filt=None):
     import matplotlib.pyplot as plt
     from astropy.io import fits 
     from astropy import wcs
-    from ..filters import filter as fil
+    try:
+        from mypython.filters import filter as fil
+    except ImportError:
+        from mypython import filters
+        from filters import filter as fil
     from scipy import interpolate
     from scipy import integrate
 
